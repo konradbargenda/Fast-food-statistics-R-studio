@@ -1,0 +1,202 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+------------------------------------------------------------------------
+
+## Introduction:
+
+In recent years the popularity of fast food restaurants has risen. Because of that there is much more competition when it comes to fast food restaurants. So it is very important to understand the business and what customers are doing to make sure your fast food has an advantage over the others. In this project I will be focusing on how time of the day impacts the sales of the fast food restaurant. To assess this problem i created 3 research questions that i will be trying to answer in order to solve this problem:
+
+1.  Does time of the day have a significant impact on sales?
+
+2.  At what time of the day do people spend the most money?
+
+3.  What kind of products sell best at what time of the day?
+
+By answering this questions Balaji Fast Food will have better understanding of the customer behavior so they can improve their business model or marketing strategies. To solve this problem I found a data set on the popular website kaggle:<https://www.kaggle.com/datasets/rajatsurana979/fast-food-sales-report>. To address these questions I will use different techniques such as: descriptive statistics, data visualization, and hypothesis testing using techniques such as ANOVA (Analysis of Variance) and Chi-Square tests.
+
+To start with the project i had to load necessary libaries and data set.
+
+```{r}
+library(ggplot2)
+
+library(dplyr)
+
+library(readr)
+
+library(lubridate)
+
+df <- read_csv("/Users/konradbargenda/Desktop/Balaji Fast Food Sales.csv")
+
+```
+
+So after loading the dataset I decided to display the first 5 rows to make sure that data is loaded correctly.
+
+```{r}
+print("First 5 Rows of the Dataset:")
+print(head(df, 5))
+```
+
+## **Data Preprocessing:**
+
+Now that data is loaded I began to start working on it. First step is to always prepare the data so I ran a few data preprocessing codes to check if there are missing values, if data about the data of the sale is written correctly, if there are any duplicate values or outliers. Because the data is about the sales I cannot use data with missing values as i cannot predict what customers did or will do, and because there were missing values in the most important column which is time of sale, putting those values by myself might interfere with the end results. So I decided to put unknown values into missing values and they won't be used later. Next line converts the date column from text format to a proper date format (day-month-year). Then I removed any duplicated rows to make sure that data is accurate. Lastly I checked for outliers by setting a maximum transaction of 1000 and all rows with higher will be replaced by value 1000. This protects the data and results from a single row that can impact the data highly.
+
+```{r}
+df$transaction_type[is.na(df$transaction_type)] <- "Unknown"
+df$time_of_sale[is.na(df$time_of_sale)] <- "Unknown"
+
+df$date <- dmy(df$date)
+
+df <- df %>% distinct()  
+
+df$transaction_amount <- ifelse(df$transaction_amount > 1000, 1000, df$transaction_amount)  
+
+```
+
+Before starting the data exploration I created 3 hypotheses for each question. Based on those hypotheses I tried to create valuable graphs that will help me answer those.
+
+Hypothesis 1: Time of day has a significant impact on sales.
+
+Hypothesis 2: People spend the most money during the night.
+
+Hypothesis 3:There is a significant relationship between product type and time of day.
+
+## **Data exploration:**
+
+First of all my problem is about time of the day and how much customers are spending money in that period. So I started by calculating it. First 3 lines calculate the total sales by time of day by grouping data set by time_of_sale. Then the results are saved in sales_by_time, where each row contains the time of sale and total sales of that time.
+
+After getting the total sales by time of the day i used it to plot the line graph that will show how in 24 numbers of total sales changes. By seeing the graph I can say that during night there are a lot more sales compared to other times of the day. This information is very crucial when it comes to Hypothesis 3: People spend the most money during the night.
+
+But the amount of sales is not always an indicator that the most money have been spent. In order to check at what time of the day customers left in the Fast Food restaurant the most money i created a simple box plot. Results showed that actually morning might have higher revenue than night but to confirm this i will also run another visualization to make sure. So the next visualization is a density graph. It will show the distribution of the transaction amount by the time of the day. For the first look it was very close that customers spend the same amount of money at night and in the morning. So to confirm the hypothesis I decided to implement statistical formulas.
+
+For the next visualization that will help me in data exploration I created an object called sales_by_product_time. Then I used this object to visualize the heat map using those results.
+
+```{r}
+sales_by_time <- df %>%
+  group_by(time_of_sale) %>%
+  summarise(total_sales = sum(transaction_amount))
+print(sales_by_time)
+
+ggplot(sales_by_time, aes(x = time_of_sale, y = total_sales, group = 1)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Total Sales by Time of Day", x = "Time of Day", y = "Total Sales") +
+  theme_minimal()
+
+ggplot(df, aes(x = time_of_sale, y = transaction_amount, fill = time_of_sale)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Transaction Amount by Time of Day", x = "Time of Day", y = "Transaction Amount") +
+  theme_minimal()
+
+ggplot(df, aes(x = transaction_amount, fill = time_of_sale)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Transaction Amount by Time of Day", x = "Transaction Amount", y = "Density") +
+  theme_minimal()
+  
+sales_by_product_time <- df %>%
+  group_by(time_of_sale, item_name) %>%
+  summarise(total_sales = sum(transaction_amount)) %>%
+  arrange(time_of_sale, desc(total_sales))
+
+ggplot(sales_by_product_time, aes(x = time_of_sale, y = reorder(item_name, total_sales), fill = total_sales)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(title = "Best-Selling Products by Time of Day", x = "Time of Day", y = "Product") +
+  theme_minimal()
+```
+
+## **Interpretation of Hypothesis Testing Results**
+
+After data exploration I proceed to hypothesis testing to see what hypothesis I can reject. To see if there is a significant difference in transaction amounts across time of the day I used ANOVA test. The first line is doing that. Then I'm getting the result and extracting the p-value. Last line is printing the ANOVA and p-value.
+
+Hypothesis 1: Time of day has a significant impact on sales.
+
+Hypothesis null 1 :Time of day does not significantly impact sales.
+
+```{r}
+anova_result <- aov(transaction_amount ~ time_of_sale, data = df)
+
+anova_summary <- summary(anova_result)
+
+p_value <- anova_summary[[1]][["Pr(>F)"]][1]
+
+print(paste("Hypothesis 1 P-value:", p_value))
+```
+
+```{r}
+if (!is.na(p_value) && length(p_value) == 1) {
+  if (p_value < 0.05) {
+    print("We reject the null hypothesis: Time of day has a significant impact on sales.")
+  } else {
+    print("We fail to reject the null hypothesis: Time of day does not significantly impact sales.")
+  }
+} else {
+  print("Error: P-value is not valid.")
+}
+```
+
+So the results of the hypothesis testing showed that p value is higher than 0.05 which means that we cannot reject the null hypothesis which means that time of day does not significantly impact sales.
+
+To test second i just ran simple code which shows total sales of each time of the day and prints out the highest.
+
+Hypothesis 2: People spend the most money during the night.
+
+```{r}
+
+max_spend_time <- sales_by_time %>%
+  filter(total_sales == max(total_sales)) %>%
+  select(time_of_sale, total_sales)
+
+print(paste("People spend the most money during:", max_spend_time$time_of_sale))
+```
+
+To test the last hypothesis I decided to use Chi-square test to see the relationship between product type and time of day. So in the first line I just ran code for calculating the chi-square and printing the results and then again in the if loop i checked if p value is lower than 0.05.
+
+Hypothesis 3: There is a significant relationship between product type and time of day.
+
+Hypothesis null 3: There is no significant relationship between product type and time of day.
+
+```{r}
+
+product_time_table <- table(df$item_name, df$time_of_sale)
+
+chi_square_result <- chisq.test(product_time_table)
+
+print("Expected values from Chi-square test:")
+print(chi_square_result$expected)
+
+if (chi_square_result$p.value < 0.05) {
+  print("We reject the null hypothesis: There is a significant relationship between product type and time of day.")
+} else {
+  print("We fail to reject the null hypothesis: There is no significant relationship between product type and time of day.")
+}
+```
+
+Results showed that i cannot reject hypothesis null again which means that there is no relationship between product type and time of the day.
+
+## **Final Discussion and Implications**
+
+The aim of this analysis was to determine the impact of time of day on sales performance at Balaji Fast food by using various statistical methods such as ANOVA and Chi-Square tests. The results showed that:
+
+Time of Day and Sales Volume (Hypothesis 1):
+
+Results of the ANOVA test indicated that time of day does not significantly impact sales, because the p-value was greater than 0.05. This shows that company does not need to focus on marketing or business mode that is about time of the day as it won't have any impact on the revenue. However, the figures that I plotted before running those tests showed that sales are higher during night. So it means that there is higher preference for customers to buy at night time but there is no statistical significance to it.
+
+Customer Spending Patterns (Hypothesis 2):
+
+Second hypothesis was about what time of day people tend to spend more money. Results showed that highest sales were recorded during the night, which might be useful information to create new strategies like special menus to use it to increase the revenue as customers are willing to spend more money at night.
+
+Product Sales and Time of Day (Hypothesis 3):
+
+Last hypothesis was about what kind of product sales the best depending on time of the day. To test it I ran a Chi-square test which showed that there is no significant relationship between the type of product and time of day. This indicates that the restaurant does not need to alter the menu to suit the behavior of the customers.
+
+Limitations of the Analysis
+
+Limited Dataset:
+
+Limitations that I met during conducting this research was that the data set that I used turned out to have a small amount of that so maybe with a higher amount of inputs I would be able to create more accurate results.
+
+In conclusion, the statistical tests did not imply that there are significant impacts on sales depending on the time of day. Graphs that I plotted showed that the company might need to start focusing on it as it might change with a higher amount of customers. 
